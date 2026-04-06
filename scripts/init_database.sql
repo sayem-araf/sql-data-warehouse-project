@@ -37,6 +37,18 @@ CREATE SCHEMA gold;
 GO
 
 -- Creating Tables
+
+IF OBJECT_ID ('bronze.crm_cust_info' , 'U') IS NOT NULL
+    DROP TABLE bronze.crm_cust_info;
+CREATE TABLE bronze.crm_cust_info (
+    cst_id NVARCHAR(50),
+    cst_key NVARCHAR(50),
+    cst_firstname NVARCHAR(50),
+    cst_latname NVARCHAR(50),
+    cst_material_status NVARCHAR(50),
+    cst_gndr NVARCHAR(50),
+    cst_craete_date DATE
+);
   
 IF OBJECT_ID ('bronze.crm_prd_info' , 'U') IS NOT NULL
     DROP TABLE bronze.crm_prd_info;
