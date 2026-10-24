@@ -1,106 +1,94 @@
-# sql-data-warehouse-project
-Building a modern data warehouse with SQL server, ETL process, data modeling and analytics
+# CRM / ERP Sales Warehouse
 
+A SQL Server learning project that turns six CRM/ERP CSV extracts into a cleaned sales model and reusable customer, product and monthly reporting views. The pipeline includes source validation, full-refresh transactions, run auditing, explicit row exclusions and executable regression checks.
 
-Complete SQL Server + Docker + macOS Setup Guide
+**Tutorial-based portfolio work.** The original project and requirements are based on materials by Baraa Khatib Salkini. See [attribution](NOTICE.md). This is not a client deployment or evidence of production data-engineering experience.
 
-1. Install Docker Desktop
+## What runs
 
-Download: https://docs.docker.com/desktop/
-Choose Mac (Apple or Intel chip)
-Open and let it start (1-2 minutes)
-2. Start SQL Server Container (First Time)
+```text
+CRM + ERP CSVs → contract validation → Bronze raw values → Silver cleaning
+              → Gold dimensions + sales fact → customer / product / sales reports
+```
 
-docker run -d \
-  --name sqlserver \
-  -e ACCEPT_EULA=Y \
-  -e SA_PASSWORD=Economix22 \
-  -p 1433:1433 \
-  -v sqlserver_data:/var/opt/mssql \
-  -v ~/Desktop/sql-data-warehouse-project/datasets:/var/opt/mssql/datasets \
-  mcr.microsoft.com/mssql/server:latest
-Why each flag:
+- One current customer and product model, joined to order/product sales lines.
+- Consistent source IDs, dates and numeric types; customer deduplication and ERP enrichment.
+- Excluded sales are logged by reason and reconciled to raw source counts.
+- A failed load rolls back all layers, retains the prior successful result and records the error.
+- Repeat loads replace the snapshot without accumulating duplicate sales.
+- Report CSV exports can be imported into Power BI. A new PBIX file is not included.
 
--d = run in background
---name sqlserver = give container a name
--e ACCEPT_EULA=Y = accept license
--e SA_PASSWORD=Economix22 = set admin password
--p 1433:1433 = map port from Mac to container
--v sqlserver_data:/var/opt/mssql = persistent data storage (won't lose data on restart)
--v ~/Desktop/...:/var/opt/mssql/datasets = mount your Mac folder so SQL Server can read CSV files
-3. Install mssql Extension in VS Code
+## Run the public fixture demo
 
-Open VS Code
-Extensions (Cmd + Shift + X)
-Search mssql
-Install "SQL Server (mssql)" by Microsoft
-4. Connect in VS Code
+Prerequisites: Python 3.10+, Docker, SQL Server 2025 with `sqlcmd` at `/opt/mssql-tools18/bin/sqlcmd`. Python scripts use the standard library only.
 
-Press Cmd + Shift + P
-Type MS SQL: Add Connection
-Fill in:
-Server: localhost,1433
-Authentication: SQL Login
-User: sa
-Password: Economix22
-Trust certificate: checked
-Click Connect
-5. Create Database & Tables Right-click connection → New Query, then run:
+1. Read [Microsoft's SQL Server container setup and licensing guidance](https://learn.microsoft.com/sql/linux/quickstart-install-connect-docker). On an x86-64 machine:
 
-CREATE DATABASE Datawarehouse;
-GO
-USE Datawarehouse;
-GO
-CREATE TABLE bronze.crm_cust_info (
-    -- your columns here
-);
-GO
-6. Load Data from CSV
+   ```sh
+   python3 tools/start_sqlserver.py --accept-eula
+   ```
 
-USE Datawarehouse;
-GO
-BULK INSERT bronze.crm_cust_info
-FROM '/var/opt/mssql/datasets/source_crm/cust_info.csv'
-WITH (
-    FIRSTROW = 2,
-    FIELDTERMINATOR = ',',
-    TABLOCK
-);
-GO
-Important:
+   On Apple Silicon, add `--allow-emulation` only for a local experiment. Microsoft does not support SQL Server container emulation on ARM. A successful local test is not a supported deployment. The container is bound to `127.0.0.1:14330`, has a generated password and uses a separate `PortfolioWarehouse` database. It does not reuse or delete an existing warehouse.
 
-Use /var/opt/mssql/datasets/... (container path), NOT /Users/... (Mac path)
-Docker's volume mount translates the container path to your actual Mac folder
-7. Verify Data
+2. Wait until SQL Server reports it is ready in `docker logs portfolio-warehouse-test`. Then stage the committed **fictional** fixtures:
 
-SELECT COUNT(*) FROM bronze.crm_cust_info;
-GO
-SELECT * FROM bronze.crm_cust_info;
-GO
-8. Manage Container
+   ```sh
+   python3 tools/prepare_sources.py tests/fixtures
+   python3 tools/run_pipeline.py --as-of 2026-10-24
+   python3 tools/export_reports.py
+   ```
 
-# Check if running
-docker ps
+   Expected fixture result: 10 raw sales lines, 5 accepted, 5 excluded; accepted sales 790 source monetary units. Original extracts are not bundled with these fixtures.
 
-# Stop
-docker stop sqlserver
+3. Inspect `gold.report_customers`, `gold.report_products`, `gold.sales_trends`, `audit.etl_run` and `audit.quality_issue`. Exported files appear in `output/gold/` and remain local.
 
-# Start (data persists)
-docker start sqlserver
+To stop and resume the dedicated container, use `docker stop portfolio-warehouse-test` and `docker start portfolio-warehouse-test`. Removing it deletes its database; source CSVs remain in the host staging folder and can rebuild it. Do not remove containers belonging to other projects.
 
-# View logs
-docker logs sqlserver
+## Use original course extracts
 
-# Check volume storage
-docker volume inspect sqlserver_data
-Key Concepts:
+```sh
+python3 tools/prepare_sources.py /absolute/path/to/01_datasets
+python3 tools/run_pipeline.py --as-of 2026-10-24
+python3 tools/export_reports.py
+```
 
-Container = isolated SQL Server environment on your Mac
-Volume mounts (-v) = bridges between Mac files and container
-Persistent storage = data saved on Mac, not lost on restart
-localhost:1433 = how your Mac connects to container
-What Went Wrong Before:
+Source preparation validates all six contracts before writing normalized, Unicode-safe bulk files under `dataset/`. It handles uppercase ERP filenames. The original folder is unchanged. Original extracts, local staging, exports and credentials are excluded from Git.
 
-First container had no -v sqlserver_data → data was lost on restart
-No dataset volume mount → couldn't read CSV files
-Solution: Use both -v flags as shown above
+The load is deliberately a **full snapshot refresh**, not an incremental or streaming pipeline. Previous successful business rows remain readable if a refresh fails. Re-running initialization is non-destructive; do not run the old tutorial database-drop script against an existing database.
+
+## Model and business questions
+
+[Model, cleaning rules and metric definitions](docs/model-and-rules.md) explains the star model, fact grain, keys, source precedence, excluded records and limitations. [Business queries](scripts/gold/business_questions.sql) cover:
+
+- Which product categories contribute most to sales and known-cost profit?
+- How do one-order and repeat customers differ in sales contribution?
+- How do sales change across adjacent observed months?
+- Which records were excluded, and why?
+
+Cost-based profit uses the latest product cost, not historical realised cost. It excludes operating expenses and has no FX or accounting-revenue treatment. Recency uses the last observed order date, and partial first/last months require care. Findings must disclose exclusions and dataset boundaries.
+
+## Reproducible checks
+
+```sh
+python3 -m unittest discover -s tests -p 'test_sources.py' -v
+DW_INTEGRATION=1 python3 -m unittest discover -s tests -p 'test_integration.py' -v
+```
+
+Source tests cover header/duplicate-file rejection and Unicode/quoted fields. SQL Server integration tests cover expected totals and exclusions, rerun stability, missing-file rollback, conflicting order ownership, duplicate sales, missing costs and Unicode ingestion. Integration tests deliberately replace the dedicated test database's snapshot with fixtures; **run the original-source pipeline again afterward** to restore the full dataset.
+
+CI runs source checks only; SQL Server tests are an explicit local step. No cloud scheduling, live ERP connector, incremental merge, production access model or operational SLA is claimed.
+
+## Repository guide
+
+| Path | Purpose |
+| --- | --- |
+| `scripts/init_database.sql` | Create the separate database and audit objects safely |
+| `scripts/bronze/` | Raw tables and CSV ingestion |
+| `scripts/silver/` | Cleaning, enrichment and exclusion recording |
+| `scripts/gold/` | Star views, reports and business queries |
+| `scripts/quality/checks.sql` | Publication assertions and transactional orchestration |
+| `tools/` | Setup, source preparation, execution and BI export |
+| `tests/fixtures/` | Small fictional source files, including known data errors |
+| `docs/` | Model documentation, validation results and upstream licence |
+
+[Validation results](docs/validation.md) records what was actually run and the remaining boundaries.
