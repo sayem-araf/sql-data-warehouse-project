@@ -1,0 +1,4 @@
+prd_id,prd_key,prd_nm,prd_cost,prd_line,prd_start_dt,prd_end_dt
+10,CO-RF-P100,Demo component,40,R,2025-01-01,2025-12-31
+11,CO-RF-P100,Demo component,50,R,2026-01-01,
+20,BI-RD-P200,Demo assembly,100,M,2025-01-01,

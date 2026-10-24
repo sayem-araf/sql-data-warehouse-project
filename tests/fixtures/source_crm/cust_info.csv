@@ -1,0 +1,6 @@
+cst_id,cst_key,cst_firstname,cst_lastname,cst_marital_status,cst_gndr,cst_create_date
+1,AW001,  Alex  , Demo ,S,M,2025-01-01
+1,AW001,Alex,Demo,M,M,2026-01-01
+2,AW002,Sam,Example,S,,2025-01-01
+3,AW003,Jo,Sample,,F,2025-01-01
+bad,INVALID,Bad,Key,,,2025-01-01

@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.venv/
+output/
+# Original source extracts remain local. Public test fixtures live under tests/fixtures.
+dataset/*
+!dataset/README.md
